@@ -55,3 +55,73 @@ XposedHelpers.findAndHookMethod(XposedHelpers.findClass("java.lang.ClassLoader",
 
 - 记得用文件差异分析，今天先溜了
 
+
+
+###  2018.6.24 第二次分析
+
+- 抢红包操作走的 ReceiveRedPacketActivity.class 这个类
+- 红包数据是this.getIntent().getSerializableExtra("red_packet_block")); // 这个应该是红包id还是怎么的
+- 新老版本的数据有变化，不过流程还是差不多的
+- 本次使用了新的hook代码 
+- 抢红包应该是initData() 方法  
+
+
+#### 问题
+
+- 对于加壳应用怎么创建 ReceiveRedPacketActivity 并传参数
+- 没有hook 到接受红包数据
+
+```java
+
+XposedHelpers.findAndHookMethod(XposedHelpers.findClass("java.lang.ClassLoader", loadPackageParam.classLoader)
+                , "loadClass", String.class, new XC_MethodHook() {
+            @Override
+            protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                super.afterHookedMethod(param);
+                Class<?> clazz = (Class<?>) param.getResult();
+                if( clazz!= null && clazz.getName().indexOf("org.telegram")!=-1){
+                    Method[] declaredMethods = clazz.getDeclaredMethods();
+                    Log.e("[执行方法]:" , "-------------init--------------" + Arrays.toString(declaredMethods));
+                    for (final Method method : declaredMethods) {
+                        if(!set.contains(method)){
+                            set.add(method);
+                            XposedBridge.hookMethod(method, new XC_MethodHook() {
+                                @Override
+                                protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                                    super.afterHookedMethod(param);
+                                    Log.e("[执行方法]:" ,
+                                            "class -- " + param.thisObject == null ? null : param.thisObject.getClass()
+                                            + "-- methodName -- "  + param.method.getName()
+                                            + "-- ParameterTypes --" + Arrays.toString(method.getParameterTypes())
+                                            + "-- result -- " + param.getResult()
+                                            + "-- param.args -- " + Arrays.toString(param.args) + "--" );
+
+                                    if (param.thisObject != null){
+
+                                        Field[] declaredFields = param.thisObject.getClass().getDeclaredFields();
+
+
+                                        Log.e("[执行方法-查看属性]:" , "=================start==================");
+                                        for (Field declaredField : declaredFields) {
+                                            declaredField.setAccessible(true);
+                                            Object o = declaredField.get(param.thisObject);
+                                            Log.e("[执行方法-查看属性]:" ,( "name -- " + declaredField.getName() + " -- class -- "+  declaredField.getType())  +  (o!= null ?( " -- result -- " + o.toString()) : null));
+                                        }
+                                        Log.e("[执行方法-查看属性]:" , "=================end==================");
+                                    }
+                                }
+                            });
+                        }
+                    }
+                }
+            }
+        });
+
+
+```
+
+## 下周继续整
+
+
+
+
